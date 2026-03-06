@@ -8,23 +8,15 @@ function formatDuration(ms: number): string {
 	return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-function formatTrackItem(item: Track | Episode) {
+function formatTrackItem(item: Track | Episode): string {
 	if (item.type === "track") {
 		const track = item as Track;
-		return {
-			name: track.name,
-			artists: track.artists.map((a) => a.name),
-			album: track.album.name,
-			duration: formatDuration(track.duration_ms),
-		};
+		const artists = track.artists.map((a) => a.name).join(", ");
+		return `${track.name} - ${artists} (${track.album.name}) [${formatDuration(track.duration_ms)}]`;
 	}
-	// Episode
 	const episode = item as Episode;
-	return {
-		name: episode.name,
-		show: episode.show?.name,
-		duration: formatDuration(episode.duration_ms),
-	};
+	const show = episode.show?.name ? ` (${episode.show.name})` : "";
+	return `${episode.name}${show} [${formatDuration(episode.duration_ms)}]`;
 }
 
 async function searchTrack(sdk: SpotifyApi, query: string): Promise<Track> {
@@ -74,24 +66,27 @@ export function registerPlaybackTools(
 				};
 			}
 
-			const formatted = {
-				isPlaying: state.is_playing,
-				track: state.item ? formatTrackItem(state.item) : null,
-				progress: formatDuration(state.progress_ms),
-				device: {
-					name: state.device.name,
-					type: state.device.type,
-					volumePercent: state.device.volume_percent,
-				},
-				repeatState: state.repeat_state,
-				shuffleState: state.shuffle_state,
-			};
+			const trackInfo = state.item
+				? formatTrackItem(state.item)
+				: "不明";
+			const totalDuration = state.item
+				? formatDuration(state.item.duration_ms)
+				: "?:??";
+
+			const lines = [
+				"## Now Playing",
+				`- **トラック**: ${trackInfo}`,
+				`- **進行**: ${formatDuration(state.progress_ms)} / ${totalDuration}`,
+				`- **状態**: ${state.is_playing ? "再生中" : "一時停止"}`,
+				`- **デバイス**: ${state.device.name} (${state.device.type}, ${state.device.volume_percent}%)`,
+				`- **リピート**: ${state.repeat_state} | **シャッフル**: ${state.shuffle_state ? "on" : "off"}`,
+			];
 
 			return {
 				content: [
 					{
 						type: "text" as const,
-						text: JSON.stringify(formatted, null, 2),
+						text: lines.join("\n"),
 					},
 				],
 			};
@@ -355,20 +350,34 @@ export function registerPlaybackTools(
 		async () => {
 			const queue = await sdk.player.getUsersQueue();
 
-			const formatted = {
-				currentlyPlaying: queue.currently_playing
-					? formatTrackItem(queue.currently_playing as Track | Episode)
-					: null,
-				queue: queue.queue.map((item) =>
-					formatTrackItem(item as Track | Episode),
-				),
-			};
+			const lines: string[] = [];
+
+			lines.push("## Now Playing");
+			if (queue.currently_playing) {
+				lines.push(
+					`- ${formatTrackItem(queue.currently_playing as Track | Episode)}`,
+				);
+			} else {
+				lines.push("- なし");
+			}
+
+			lines.push("");
+			lines.push("## Queue");
+			if (queue.queue.length === 0) {
+				lines.push("キューは空です");
+			} else {
+				for (const [i, item] of queue.queue.entries()) {
+					lines.push(
+						`${i + 1}. ${formatTrackItem(item as Track | Episode)}`,
+					);
+				}
+			}
 
 			return {
 				content: [
 					{
 						type: "text" as const,
-						text: JSON.stringify(formatted, null, 2),
+						text: lines.join("\n"),
 					},
 				],
 			};
@@ -383,18 +392,19 @@ export function registerPlaybackTools(
 		async () => {
 			const result = await sdk.player.getRecentlyPlayedTracks(20);
 
-			const formatted = result.items.map((item) => ({
-				name: item.track.name,
-				artists: item.track.artists.map((a) => a.name),
-				album: item.track.album.name,
-				playedAt: item.played_at,
-			}));
+			const lines = ["## Recently Played"];
+			for (const [i, item] of result.items.entries()) {
+				const artists = item.track.artists.map((a) => a.name).join(", ");
+				lines.push(
+					`${i + 1}. ${item.track.name} - ${artists} (${item.track.album.name}) [${item.played_at}]`,
+				);
+			}
 
 			return {
 				content: [
 					{
 						type: "text" as const,
-						text: JSON.stringify(formatted, null, 2),
+						text: lines.join("\n"),
 					},
 				],
 			};

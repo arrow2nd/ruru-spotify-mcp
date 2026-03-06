@@ -8,32 +8,50 @@ import type {
 } from "@spotify/web-api-ts-sdk";
 import { z } from "zod";
 
-function formatTrack(track: Track) {
-	return {
-		name: track.name,
-		artists: track.artists.map((a) => a.name),
-		album: track.album.name,
-		durationMs: track.duration_ms,
-		popularity: track.popularity,
-	};
+function formatDuration(ms: number): string {
+	const minutes = Math.floor(ms / 60000);
+	const seconds = Math.floor((ms % 60000) / 1000);
+	return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-function formatAlbum(album: SimplifiedAlbum) {
-	return {
-		name: album.name,
-		artists: album.artists.map((a) => a.name),
-		releaseDate: album.release_date,
-		totalTracks: album.total_tracks,
-	};
+function formatTracksTable(tracks: Track[]): string {
+	const header =
+		"| # | トラック | アーティスト | アルバム | 時間 | 人気度 |\n|---|---|---|---|---|---|";
+	const rows = tracks.map(
+		(t, i) =>
+			`| ${i + 1} | ${t.name} | ${t.artists.map((a) => a.name).join(", ")} | ${t.album.name} | ${formatDuration(t.duration_ms)} | ${t.popularity} |`,
+	);
+	return [header, ...rows].join("\n");
 }
 
-function formatArtist(artist: Artist) {
-	return {
-		name: artist.name,
-		genres: artist.genres,
-		popularity: artist.popularity,
-		followers: artist.followers?.total ?? 0,
-	};
+function formatAlbumsTable(albums: SimplifiedAlbum[]): string {
+	const header =
+		"| # | アルバム | アーティスト | リリース日 | 曲数 |\n|---|---|---|---|---|";
+	const rows = albums.map(
+		(a, i) =>
+			`| ${i + 1} | ${a.name} | ${a.artists.map((ar) => ar.name).join(", ")} | ${a.release_date} | ${a.total_tracks} |`,
+	);
+	return [header, ...rows].join("\n");
+}
+
+function formatArtistsTable(artists: Artist[]): string {
+	const header =
+		"| # | アーティスト | ジャンル | フォロワー | 人気度 |\n|---|---|---|---|---|";
+	const rows = artists.map(
+		(a, i) =>
+			`| ${i + 1} | ${a.name} | ${a.genres.join(", ") || "-"} | ${(a.followers?.total ?? 0).toLocaleString()} | ${a.popularity} |`,
+	);
+	return [header, ...rows].join("\n");
+}
+
+function formatPlaylistsTable(playlists: SimplifiedPlaylist[]): string {
+	const header =
+		"| # | プレイリスト | オーナー | 曲数 | 説明 |\n|---|---|---|---|---|";
+	const rows = playlists.map(
+		(p, i) =>
+			`| ${i + 1} | ${p.name} | ${p.owner.display_name} | ${p.tracks?.total ?? 0} | ${p.description || "-"} |`,
+	);
+	return [header, ...rows].join("\n");
 }
 
 export function registerSearchTools(server: McpServer, sdk: SpotifyApi): void {
@@ -52,48 +70,77 @@ export function registerSearchTools(server: McpServer, sdk: SpotifyApi): void {
 		async (args) => {
 			const results = await sdk.search(args.query, [args.type], undefined, 10);
 
-			let formatted: unknown[];
+			let markdown: string;
 
 			switch (args.type) {
-				case "track":
-					formatted = (results.tracks?.items ?? []).map(formatTrack);
-					break;
-				case "album":
-					formatted = (results.albums?.items ?? []).map(formatAlbum);
-					break;
-				case "artist":
-					formatted = (results.artists?.items ?? []).map(formatArtist);
-					break;
-				case "playlist":
-					formatted = (results.playlists?.items ?? []).map((p) => {
-						// SDK の型定義では PlaylistBase だが、API は tracks を返す
-						const pl = p as unknown as SimplifiedPlaylist;
+				case "track": {
+					const items = results.tracks?.items ?? [];
+					if (items.length === 0) {
 						return {
-							name: pl.name,
-							description: pl.description,
-							owner: pl.owner.display_name,
-							trackCount: pl.tracks?.total ?? 0,
+							content: [
+								{
+									type: "text" as const,
+									text: `「${args.query}」に一致するトラックが見つかりません`,
+								},
+							],
 						};
-					});
+					}
+					markdown = formatTracksTable(items);
 					break;
-			}
-
-			if (formatted.length === 0) {
-				return {
-					content: [
-						{
-							type: "text" as const,
-							text: `「${args.query}」に一致する${args.type}が見つかりません`,
-						},
-					],
-				};
+				}
+				case "album": {
+					const items = results.albums?.items ?? [];
+					if (items.length === 0) {
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: `「${args.query}」に一致するアルバムが見つかりません`,
+								},
+							],
+						};
+					}
+					markdown = formatAlbumsTable(items);
+					break;
+				}
+				case "artist": {
+					const items = results.artists?.items ?? [];
+					if (items.length === 0) {
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: `「${args.query}」に一致するアーティストが見つかりません`,
+								},
+							],
+						};
+					}
+					markdown = formatArtistsTable(items);
+					break;
+				}
+				case "playlist": {
+					// SDK の型定義では PlaylistBase だが、API は tracks を返す
+					const items = (results.playlists?.items ?? []) as unknown as SimplifiedPlaylist[];
+					if (items.length === 0) {
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: `「${args.query}」に一致するプレイリストが見つかりません`,
+								},
+							],
+						};
+					}
+					markdown = formatPlaylistsTable(items);
+					break;
+				}
 			}
 
 			return {
 				content: [
 					{
 						type: "text" as const,
-						text: JSON.stringify(formatted, null, 2),
+						text: markdown,
 					},
 				],
 			};

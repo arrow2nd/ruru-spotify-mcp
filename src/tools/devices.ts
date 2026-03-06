@@ -3,6 +3,17 @@ import type { SpotifyApi } from "@spotify/web-api-ts-sdk";
 import { z } from "zod";
 import type { Registry } from "../registry.ts";
 
+function formatDevicesTable(
+	devices: { name: string; type: string; volumePercent: number | null; isActive: boolean }[],
+): string {
+	const header = "| デバイス名 | 種類 | 音量 | アクティブ |\n|---|---|---|---|";
+	const rows = devices.map(
+		(d) =>
+			`| ${d.name} | ${d.type} | ${d.volumePercent ?? "-"}% | ${d.isActive ? "Yes" : "No"} |`,
+	);
+	return [header, ...rows].join("\n");
+}
+
 export function registerDeviceTools(
 	server: McpServer,
 	sdk: SpotifyApi,
@@ -32,7 +43,7 @@ export function registerDeviceTools(
 				content: [
 					{
 						type: "text" as const,
-						text: JSON.stringify(devices, null, 2),
+						text: formatDevicesTable(devices),
 					},
 				],
 			};
