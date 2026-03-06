@@ -1,6 +1,6 @@
 {
   "name": "ruru-spotify-mcp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "MCP server for Spotify Web API — control playback, search, and manage playlists by name, no IDs exposed",
   "type": "module",
   "bin": {

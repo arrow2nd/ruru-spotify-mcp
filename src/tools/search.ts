@@ -39,7 +39,7 @@ function formatArtistsTable(artists: Artist[]): string {
 		"| # | アーティスト | ジャンル | フォロワー | 人気度 |\n|---|---|---|---|---|";
 	const rows = artists.map(
 		(a, i) =>
-			`| ${i + 1} | ${a.name} | ${a.genres.join(", ") || "-"} | ${(a.followers?.total ?? 0).toLocaleString()} | ${a.popularity} |`,
+			`| ${i + 1} | ${a.name} | ${(a.genres ?? []).join(", ") || "-"} | ${(a.followers?.total ?? 0).toLocaleString()} | ${a.popularity} |`,
 	);
 	return [header, ...rows].join("\n");
 }
