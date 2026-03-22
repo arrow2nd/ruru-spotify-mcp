@@ -1,18 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { SpotifyApi } from "@spotify/web-api-ts-sdk";
 import { z } from "zod";
+import { toYamlList } from "../format.ts";
 import type { Registry } from "../registry.ts";
-
-function formatDevicesTable(
-	devices: { name: string; type: string; volumePercent: number | null; isActive: boolean }[],
-): string {
-	const header = "| デバイス名 | 種類 | 音量 | アクティブ |\n|---|---|---|---|";
-	const rows = devices.map(
-		(d) =>
-			`| ${d.name} | ${d.type} | ${d.volumePercent ?? "-"}% | ${d.isActive ? "Yes" : "No"} |`,
-	);
-	return [header, ...rows].join("\n");
-}
 
 export function registerDeviceTools(
 	server: McpServer,
@@ -39,11 +29,20 @@ export function registerDeviceTools(
 				};
 			}
 
+			const yaml = toYamlList(
+				devices.map((d) => ({
+					name: d.name,
+					type: d.type,
+					volume: d.volumePercent ?? 0,
+					active: d.isActive,
+				})),
+			);
+
 			return {
 				content: [
 					{
 						type: "text" as const,
-						text: formatDevicesTable(devices),
+						text: yaml,
 					},
 				],
 			};

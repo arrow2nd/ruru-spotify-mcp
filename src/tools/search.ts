@@ -7,51 +7,51 @@ import type {
 	Track,
 } from "@spotify/web-api-ts-sdk";
 import { z } from "zod";
+import { formatDuration, toYamlList } from "../format.ts";
 
-function formatDuration(ms: number): string {
-	const minutes = Math.floor(ms / 60000);
-	const seconds = Math.floor((ms % 60000) / 1000);
-	return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+function formatTracks(tracks: Track[]): string {
+	return toYamlList(
+		tracks.map((t) => ({
+			name: t.name,
+			artists: t.artists.map((a) => a.name).join(", "),
+			album: t.album.name,
+			duration: formatDuration(t.duration_ms),
+			popularity: t.popularity,
+		})),
+	);
 }
 
-function formatTracksTable(tracks: Track[]): string {
-	const header =
-		"| # | トラック | アーティスト | アルバム | 時間 | 人気度 |\n|---|---|---|---|---|---|";
-	const rows = tracks.map(
-		(t, i) =>
-			`| ${i + 1} | ${t.name} | ${t.artists.map((a) => a.name).join(", ")} | ${t.album.name} | ${formatDuration(t.duration_ms)} | ${t.popularity} |`,
+function formatAlbums(albums: SimplifiedAlbum[]): string {
+	return toYamlList(
+		albums.map((a) => ({
+			name: a.name,
+			artists: a.artists.map((ar) => ar.name).join(", "),
+			released: a.release_date,
+			tracks: a.total_tracks,
+		})),
 	);
-	return [header, ...rows].join("\n");
 }
 
-function formatAlbumsTable(albums: SimplifiedAlbum[]): string {
-	const header =
-		"| # | アルバム | アーティスト | リリース日 | 曲数 |\n|---|---|---|---|---|";
-	const rows = albums.map(
-		(a, i) =>
-			`| ${i + 1} | ${a.name} | ${a.artists.map((ar) => ar.name).join(", ")} | ${a.release_date} | ${a.total_tracks} |`,
+function formatArtists(artists: Artist[]): string {
+	return toYamlList(
+		artists.map((a) => ({
+			name: a.name,
+			genres: (a.genres ?? []).join(", ") || "-",
+			followers: a.followers?.total ?? 0,
+			popularity: a.popularity,
+		})),
 	);
-	return [header, ...rows].join("\n");
 }
 
-function formatArtistsTable(artists: Artist[]): string {
-	const header =
-		"| # | アーティスト | ジャンル | フォロワー | 人気度 |\n|---|---|---|---|---|";
-	const rows = artists.map(
-		(a, i) =>
-			`| ${i + 1} | ${a.name} | ${(a.genres ?? []).join(", ") || "-"} | ${(a.followers?.total ?? 0).toLocaleString()} | ${a.popularity} |`,
+function formatPlaylists(playlists: SimplifiedPlaylist[]): string {
+	return toYamlList(
+		playlists.map((p) => ({
+			name: p.name,
+			owner: p.owner.display_name,
+			tracks: p.tracks?.total ?? 0,
+			description: p.description || "-",
+		})),
 	);
-	return [header, ...rows].join("\n");
-}
-
-function formatPlaylistsTable(playlists: SimplifiedPlaylist[]): string {
-	const header =
-		"| # | プレイリスト | オーナー | 曲数 | 説明 |\n|---|---|---|---|---|";
-	const rows = playlists.map(
-		(p, i) =>
-			`| ${i + 1} | ${p.name} | ${p.owner.display_name} | ${p.tracks?.total ?? 0} | ${p.description || "-"} |`,
-	);
-	return [header, ...rows].join("\n");
 }
 
 export function registerSearchTools(server: McpServer, sdk: SpotifyApi): void {
@@ -70,7 +70,7 @@ export function registerSearchTools(server: McpServer, sdk: SpotifyApi): void {
 		async (args) => {
 			const results = await sdk.search(args.query, [args.type], undefined, 10);
 
-			let markdown: string;
+			let yaml: string;
 
 			switch (args.type) {
 				case "track": {
@@ -85,7 +85,7 @@ export function registerSearchTools(server: McpServer, sdk: SpotifyApi): void {
 							],
 						};
 					}
-					markdown = formatTracksTable(items);
+					yaml = formatTracks(items);
 					break;
 				}
 				case "album": {
@@ -100,7 +100,7 @@ export function registerSearchTools(server: McpServer, sdk: SpotifyApi): void {
 							],
 						};
 					}
-					markdown = formatAlbumsTable(items);
+					yaml = formatAlbums(items);
 					break;
 				}
 				case "artist": {
@@ -115,12 +115,13 @@ export function registerSearchTools(server: McpServer, sdk: SpotifyApi): void {
 							],
 						};
 					}
-					markdown = formatArtistsTable(items);
+					yaml = formatArtists(items);
 					break;
 				}
 				case "playlist": {
 					// SDK の型定義では PlaylistBase だが、API は tracks を返す
-					const items = (results.playlists?.items ?? []) as unknown as SimplifiedPlaylist[];
+					const items = (results.playlists?.items ??
+						[]) as unknown as SimplifiedPlaylist[];
 					if (items.length === 0) {
 						return {
 							content: [
@@ -131,7 +132,7 @@ export function registerSearchTools(server: McpServer, sdk: SpotifyApi): void {
 							],
 						};
 					}
-					markdown = formatPlaylistsTable(items);
+					yaml = formatPlaylists(items);
 					break;
 				}
 			}
@@ -140,7 +141,7 @@ export function registerSearchTools(server: McpServer, sdk: SpotifyApi): void {
 				content: [
 					{
 						type: "text" as const,
-						text: markdown,
+						text: yaml,
 					},
 				],
 			};
