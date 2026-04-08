@@ -22,11 +22,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@hono/mcp": "^0.2.3",
-    "@hono/node-server": "^1.19.9",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@spotify/web-api-ts-sdk": "^1.2.0",
-    "hono": "^4.11.9",
     "zod": "^4.3.6"
   },
   "devDependencies": {
