@@ -3,7 +3,7 @@ import type { Episode, SpotifyApi, Track } from "@spotify/web-api-ts-sdk";
 import { z } from "zod";
 import { formatDuration, toYamlList, toYamlObject } from "../format.ts";
 
-function trackFields(item: Track | Episode): Record<string, unknown> {
+export function trackFields(item: Track | Episode): Record<string, unknown> {
 	if (item.type === "track") {
 		const track = item as Track;
 		return {
@@ -19,6 +19,57 @@ function trackFields(item: Track | Episode): Record<string, unknown> {
 		show: episode.show?.name ?? "-",
 		duration: formatDuration(episode.duration_ms),
 	};
+}
+
+export async function formatPlaybackState(sdk: SpotifyApi): Promise<string> {
+	const state = await sdk.player.getPlaybackState();
+	if (!state) {
+		return "現在再生中のトラックはありません";
+	}
+
+	const item = state.item;
+	const obj: Record<string, unknown> = {};
+
+	if (item) {
+		Object.assign(obj, trackFields(item));
+	} else {
+		obj.name = "不明";
+	}
+
+	obj.progress = formatDuration(state.progress_ms);
+	obj.playing = state.is_playing;
+	obj.device = state.device.name;
+	obj.device_type = state.device.type;
+	obj.volume = state.device.volume_percent;
+	obj.repeat = state.repeat_state;
+	obj.shuffle = state.shuffle_state;
+
+	return toYamlObject(obj);
+}
+
+export async function formatQueue(sdk: SpotifyApi): Promise<string> {
+	const queue = await sdk.player.getUsersQueue();
+
+	const indent = (s: string) => s.replace(/^/gm, "  ");
+
+	const currentYaml = queue.currently_playing
+		? indent(
+				toYamlObject(
+					trackFields(queue.currently_playing as Track | Episode),
+				),
+			)
+		: "  name: null";
+
+	const queueYaml =
+		queue.queue.length === 0
+			? "  []"
+			: indent(
+					toYamlList(
+						queue.queue.map((item) => trackFields(item as Track | Episode)),
+					),
+				);
+
+	return `current:\n${currentYaml}\nqueue:\n${queueYaml}`;
 }
 
 async function searchTrack(sdk: SpotifyApi, query: string): Promise<Track> {
@@ -56,43 +107,9 @@ export function registerPlaybackTools(
 				"Get the current playback state including the currently playing track, device, and progress.",
 		},
 		async () => {
-			const state = await sdk.player.getPlaybackState();
-			if (!state) {
-				return {
-					content: [
-						{
-							type: "text" as const,
-							text: "現在再生中のトラックはありません",
-						},
-					],
-				};
-			}
-
-			const item = state.item;
-			const obj: Record<string, unknown> = {};
-
-			if (item) {
-				const fields = trackFields(item);
-				Object.assign(obj, fields);
-			} else {
-				obj.name = "不明";
-			}
-
-			obj.progress = formatDuration(state.progress_ms);
-			obj.playing = state.is_playing;
-			obj.device = state.device.name;
-			obj.device_type = state.device.type;
-			obj.volume = state.device.volume_percent;
-			obj.repeat = state.repeat_state;
-			obj.shuffle = state.shuffle_state;
-
+			const text = await formatPlaybackState(sdk);
 			return {
-				content: [
-					{
-						type: "text" as const,
-						text: toYamlObject(obj),
-					},
-				],
+				content: [{ type: "text" as const, text }],
 			};
 		},
 	);
@@ -352,34 +369,9 @@ export function registerPlaybackTools(
 			description: "Get the current playback queue.",
 		},
 		async () => {
-			const queue = await sdk.player.getUsersQueue();
-
-			const indent = (s: string) => s.replace(/^/gm, "  ");
-
-			const currentYaml = queue.currently_playing
-				? indent(
-						toYamlObject(
-							trackFields(queue.currently_playing as Track | Episode),
-						),
-					)
-				: "  name: null";
-
-			const queueYaml =
-				queue.queue.length === 0
-					? "  []"
-					: indent(
-							toYamlList(
-								queue.queue.map((item) => trackFields(item as Track | Episode)),
-							),
-						);
-
+			const text = await formatQueue(sdk);
 			return {
-				content: [
-					{
-						type: "text" as const,
-						text: `current:\n${currentYaml}\nqueue:\n${queueYaml}`,
-					},
-				],
+				content: [{ type: "text" as const, text }],
 			};
 		},
 	);

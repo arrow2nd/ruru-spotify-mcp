@@ -4,6 +4,23 @@ import { z } from "zod";
 import { toYamlList } from "../format.ts";
 import type { Registry } from "../registry.ts";
 
+export async function formatDeviceList(registry: Registry): Promise<string> {
+	const devices = await registry.listDevices();
+
+	if (devices.length === 0) {
+		return "利用可能なデバイスがありません。Spotify アプリを開いてください";
+	}
+
+	return toYamlList(
+		devices.map((d) => ({
+			name: d.name,
+			type: d.type,
+			volume: d.volumePercent ?? 0,
+			active: d.isActive,
+		})),
+	);
+}
+
 export function registerDeviceTools(
 	server: McpServer,
 	sdk: SpotifyApi,
@@ -16,35 +33,9 @@ export function registerDeviceTools(
 				"List all available Spotify Connect devices with their names, types, volume, and active status.",
 		},
 		async () => {
-			const devices = await registry.listDevices();
-
-			if (devices.length === 0) {
-				return {
-					content: [
-						{
-							type: "text" as const,
-							text: "利用可能なデバイスがありません。Spotify アプリを開いてください",
-						},
-					],
-				};
-			}
-
-			const yaml = toYamlList(
-				devices.map((d) => ({
-					name: d.name,
-					type: d.type,
-					volume: d.volumePercent ?? 0,
-					active: d.isActive,
-				})),
-			);
-
+			const text = await formatDeviceList(registry);
 			return {
-				content: [
-					{
-						type: "text" as const,
-						text: yaml,
-					},
-				],
+				content: [{ type: "text" as const, text }],
 			};
 		},
 	);
