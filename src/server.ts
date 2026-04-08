@@ -10,7 +10,7 @@ import { registerSearchTools } from "./tools/search.ts";
 export function createMcpServer(sdk: SpotifyApi): McpServer {
 	const server = new McpServer({
 		name: "ruru-spotify-mcp",
-		version: "0.1.0",
+		version: "1.0.0",
 	});
 
 	const registry = new Registry(sdk);
